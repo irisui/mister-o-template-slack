@@ -147,31 +147,46 @@ Run `bash .claude/skills/slack-bot/send-slack.sh <chat_id> "<message>"` to reply
 
 ## Persistence (How You Stay Alive)
 
-Your agent runs permanently via macOS launchd + tmux + caffeinate.
+**Windows variant.** This machine runs Windows, not macOS — the original launchd + tmux +
+caffeinate stack does not exist here. This project uses a Windows-native replacement instead:
+Windows Task Scheduler (auto-start at logon) + a bash restart loop (Git Bash). No tmux session
+to attach to; no caffeinate (not needed — the agent only runs while the machine is on and logged
+in, it is not expected to survive sleep).
 
 ### Lifecycle:
-1. launchd starts `scripts/agent-wrapper.sh`
-2. Wrapper creates a tmux session and runs Claude inside it
+1. Windows Task Scheduler task `my-agent-slack` starts at user logon, running
+   `scripts/agent-start-windows.sh` via Git Bash, hidden (no visible window)
+2. The script runs Claude directly (no tmux) inside a bash `while true` loop
 3. Claude reads all bootstrap files, recreates crons from config.json
-4. Agent runs for 71 hours (configurable via `max_session_seconds` in config.json)
-5. Timer kills the session, wrapper exits cleanly
-6. launchd restarts from step 1
+4. Agent runs for `max_session_seconds` (config.json), or until it crashes/exits
+5. On clean exit or crash, the loop starts a fresh session automatically
+6. After 3 crashes in one day, the loop halts and alerts on Slack — requires manual restart
 
-### Key commands:
+### Key commands (PowerShell):
+```powershell
+# Install / re-install the autostart task (run once, or after editing the script)
+.\scripts\install-windows-autostart.ps1
+
+# Start the agent right now, without waiting for the next logon
+Start-ScheduledTask -TaskName "my-agent-slack"
+
+# Check if the task is registered and its last run result
+Get-ScheduledTask -TaskName "my-agent-slack" | Get-ScheduledTaskInfo
+
+# Stop the agent immediately (kills the running loop + claude process)
+Get-Process | Where-Object { $_.Path -like "*bash.exe*" -or $_.ProcessName -eq "claude" } | Stop-Process -Force
+
+# Disable autostart (keeps the task registered, stops it firing at logon)
+Disable-ScheduledTask -TaskName "my-agent-slack"
+
+# Fully remove autostart
+Unregister-ScheduledTask -TaskName "my-agent-slack" -Confirm:$false
+```
+
+### Logs (Git Bash / any bash):
 ```bash
-# Attach to your agent's live session
-tmux attach -t my-agent
-
-# Detach without killing (Ctrl+B then D)
-
-# Check if agent is running
-tmux ls
-
-# Restart the agent
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.my-agent.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.my-agent.plist
-
-# View logs
 cat ~/.agent-logs/activity.log
 cat ~/.agent-logs/crashes.log
+cat ~/.agent-logs/stdout.log
+cat ~/.agent-logs/stderr.log
 ```
