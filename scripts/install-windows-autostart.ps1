@@ -1,11 +1,19 @@
 # install-windows-autostart.ps1 - Inregistreaza agentul in Windows Task Scheduler.
 #
 # Echivalentul Windows pentru generate-launchd.sh de pe macOS: creeaza un task
-# care porneste agentul automat la fiecare logon al userului curent, ruland
-# in fundal (fereastra ascunsa) printr-o sesiune Git Bash care executa
-# scripts/agent-start-windows.sh (bucla de auto-restart la crash).
+# care porneste agentul automat la fiecare logon al userului curent.
 #
-# Cerinte: Git for Windows instalat (git-bash.exe in PATH sau locatie standard),
+# Lantul de lansare (nu mai e un singur script, ca in prima versiune):
+#   Task Scheduler -> agent-start-windows.sh (supervisor, fara fereastra proprie)
+#                  -> launch-agent-window.ps1 -> fereastra Windows Terminal cu
+#                     claude interactiv (echivalentul tmux pe Windows)
+# Motivul: `claude --dangerously-skip-permissions "PROMPT"` fara TTY real
+# (stdout redirectat spre fisier, cum facea prima versiune) trece pe
+# comportament non-interactiv si iese dupa primul task — de-aia agentul
+# reporneste la fiecare ~2 minute si spameaza Slack cu "sunt online" in bucla.
+# O fereastra Windows Terminal ofera un TTY real, deci sesiunea ramane vie.
+#
+# Cerinte: Git for Windows, Windows Terminal (winget install Microsoft.WindowsTerminal),
 # Claude Code CLI instalat si autentificat (`claude` in PATH).
 #
 # Usage (din PowerShell, in folderul proiectului sau oriunde):
@@ -46,7 +54,20 @@ if (-not (Test-Path $ScriptPath)) {
     exit 1
 }
 
+$LauncherPath = Join-Path $ProjectDir "scripts\launch-agent-window.ps1"
+if (-not (Test-Path $LauncherPath)) {
+    Write-Error "Nu am gasit $LauncherPath"
+    exit 1
+}
+
+$WtCheck = "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe"
+if (-not (Test-Path $WtCheck) -and -not (Get-Command wt.exe -ErrorAction SilentlyContinue)) {
+    Write-Error "Windows Terminal (wt.exe) nu a fost gasit. Instaleaza-l: winget install --id Microsoft.WindowsTerminal"
+    exit 1
+}
+
 Write-Output "Bash gasit la: $BashExe"
+Write-Output "Windows Terminal: OK"
 Write-Output "Proiect: $ProjectDir"
 
 # Sterge task-ul vechi daca exista (reinstall idempotent)
@@ -64,7 +85,12 @@ $Action = New-ScheduledTaskAction `
 # Trigger: la logon-ul userului curent
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 
-# Setari: ruleaza doar cat userul e logat, fara fereastra, restart daca esueaza
+# Setari: ruleaza doar cat userul e logat, restart daca esueaza.
+# -Hidden ascunde fereastra SUPERVISOR-ului (bash-ul care verifica la 30s daca
+# agentul mai ruleaza) — dar acel supervisor lanseaza la randul lui o fereastra
+# Windows Terminal VIZIBILA cu claude interactiv (necesar pentru TTY real, vezi
+# launch-agent-window.ps1). Nu mai e deci complet-ascuns ca in prima versiune;
+# fereastra "Agent Slack" poate fi minimizata manual, dar nu inchisa.
 $Settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
