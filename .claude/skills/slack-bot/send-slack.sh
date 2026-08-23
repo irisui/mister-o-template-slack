@@ -2,6 +2,14 @@
 # Send a message to a Slack channel.
 # Usage: bash .claude/skills/slack-bot/send-slack.sh <channel_id> "<message>"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../../../.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+
 BOT_TOKEN="${SLACK_BOT_TOKEN}"
 CHANNEL="$1"
 MESSAGE="$2"
