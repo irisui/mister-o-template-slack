@@ -57,11 +57,56 @@ if (-not $BashExe) {
 $StartupPrompt = "You are starting a new session. Read all bootstrap files listed in CLAUDE.md. Then read config.json and set up your crons using /loop for each entry in the crons array. Start with the comms cron (1m) first. After crons are set up, send a Slack message to the user saying you're back online and what you're about to work on."
 $EscapedPrompt = $StartupPrompt.Replace("'", "'\''")
 
-$BashCommand = "export AGENT_SESSION_MARKER=mister-o-template-slack; cd '$ProjectDir'; claude --dangerously-skip-permissions '$EscapedPrompt'"
+# Path complet catre shim-ul POSIX "claude" (fara extensie, instalat de npm
+# langa claude.cmd) — cand bash.exe porneste dintr-un context Task Scheduler /
+# PowerShell netriggerat de un shell login normal, PATH-ul poate sa nu includa
+# folderul npm global si comanda esueaza cu "The system cannot find the file
+# specified" (0x80070002), desi task-ul porneste corect fereastra.
+# IMPORTANT: trebuie shim-ul POSIX ("claude"), NU claude.cmd — bash/MSYS nu
+# poate exec direct un batch file Windows (.cmd) ca binar, indiferent de
+# quoting; folosind path complet catre shim-ul fara extensie, bash il ruleaza
+# ca orice alt script shell.
+$ClaudeExeWin = "$env:APPDATA\npm\claude"
+if (-not (Test-Path $ClaudeExeWin)) {
+    Write-Error "claude (shim POSIX) nu a fost gasit la $ClaudeExeWin."
+    exit 1
+}
+# Convertim path-ul Windows in format bash (C:\... -> /c/...) pentru comanda bash -lc.
+$ClaudeExeBash = "/" + $ClaudeExeWin.Substring(0,1).ToLower() + $ClaudeExeWin.Substring(2).Replace('\','/')
 
+# Scriem comanda intr-un fisier .sh temporar, in loc s-o dam ca string inline
+# lui `wt.exe ... -- bash.exe -lc "..."`. Testat izolat: wt.exe isi face
+# propriul split al argumentelor de dupa `--` inainte sa le paseze mai departe,
+# si un string cu ';' si spatii/ghilimele imbricate (path-ul contine
+# "Nick Popescu") se rupe la mijloc — wt.exe a incercat sa lanseze o bucata
+# din prompt ca fisier separat ("read -p 'press enter''": file not found).
+# Cu un singur fisier .sh ca argument, wt.exe nu mai are nimic de spart.
+$AgentLogDir = Join-Path $env:USERPROFILE ".agent-logs"
+New-Item -ItemType Directory -Force -Path $AgentLogDir | Out-Null
+$LaunchScript = Join-Path $AgentLogDir "launch-agent.sh"
+
+$ScriptContent = @"
+export AGENT_SESSION_MARKER=mister-o-template-slack
+cd '$ProjectDir'
+'$ClaudeExeBash' --dangerously-skip-permissions '$EscapedPrompt'
+"@
+Set-Content -Path $LaunchScript -Value $ScriptContent -Encoding ASCII -NoNewline
+
+$LaunchScriptBash = "/" + $LaunchScript.Substring(0,1).ToLower() + $LaunchScript.Substring(2).Replace('\','/')
+
+# NOTA: "--title" cu o valoare ce contine spatiu ("Agent Slack") s-a dovedit
+# a rupe parsing-ul argumentelor la wt.exe in acest mediu — titlul rezultat
+# era doar "Agent", iar restul ("Slack -- bash.exe ...") era interpretat ca
+# un program separat de lansat, cauzand exact eroarea 0x80070002 investigata
+# aici. Titlu fara spatiu ("AgentSlack") evita problema.
+#
+# NOTA 2: acelasi wt.exe rupe la spatiu si argumentul cu path-ul scriptului
+# ($LaunchScriptBash contine "Nick Popescu"), daca nu e ghilimeluit explicit —
+# altfel bash.exe primeste "/c/Users/Nick" si "Popescu/..." ca doua argumente
+# separate ("No such file or directory"). Ghilimele explicite in string.
 Start-Process -FilePath $WtExe -ArgumentList @(
     "new-tab",
-    "--title", "Agent Slack",
+    "--title", "AgentSlack",
     "--",
-    $BashExe, "-lc", $BashCommand
+    $BashExe, "`"$LaunchScriptBash`""
 )
