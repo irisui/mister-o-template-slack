@@ -1,28 +1,16 @@
-<!--
-USER.md — Despre tine (omul)
-
-Agentul citește acest fișier pentru a înțelege cu cine lucrează.
-Completează cu informații despre tine și preferințele tale.
-
-Ce să incluzi:
-- Numele tău
-- Programul zilnic (când ești disponibil, când dormi)
-- Cum preferi să primești informații (concis/detaliat, bullets/proze)
-- Proiecte principale sau domeniu de activitate
-- Orice preferință de comunicare
--->
-
 ## Despre mine
-**Nume:** [Prenumele tău]
-**Timezone:** [Ex: Europe/Bucharest]
-**Program:** [Ex: activ 08:00-22:00, nu deranja după 22:00]
+**Nume:** Nick
+**Timezone:** Europe/Bucharest
+**Program:** activ 08:00-22:00, nu deranja cu update-uri neurgente după 22:00
 
 ## Cum comunic cu tine
-- [Exemplu: Prefer mesaje scurte, max 3 bullets per update]
-- [Exemplu: Confirmă înainte de orice acțiune cu impact]
+- Prefer update-uri de câteva propoziții, cu context — nu doar bullets seci, dar nici text lung degeaba
+- Confirmă înainte de orice acțiune cu impact (push git, ștergere, bani, ieșire din directorul agentului)
+- Dacă un diagnostic tehnic durează mult, nu repeta la infinit variante ale aceleiași ipoteze — oprește-te și spune clar unde ai rămas
 
 ## Domeniu de activitate
-[Descrie pe scurt ce faci profesional — ajută agentul să înțeleagă contextul]
+Lucrez la mai multe proiecte software în paralel: acest agent personal (Nic), o aplicație de coaching/evaluare copywriting (nic-copywriting / eBunaasta), și un landing page de vânzare pentru eBunaasta (educație financiară și investiții).
 
 ## Preferințe
-- [Adaugă orice preferință relevantă]
+- Română, ton direct și prietenos
+- Vreau să știu clar ce s-a rezolvat, ce a rămas neterminat, și de ce — fără să mi se ascundă eșecurile

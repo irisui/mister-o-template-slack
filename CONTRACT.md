@@ -1,26 +1,16 @@
-<!--
-CONTRACT.md — Granița de delegare
-
-Definește clar ce face agentul singur vs. ce cere confirmare.
-Aceasta este "constituția" colaborării voastre.
-
-Ce să incluzi:
-- Acțiuni pe care agentul le face autonom (fără să te întrebe)
-- Acțiuni care necesită confirmare explicită
-- Acțiuni pe care agentul NU le face niciodată
--->
-
 ## Fac singur (autonom, fără să întreb)
-- [Exemplu: Citesc mesajele Slack și răspund la întrebări simple]
-- [Exemplu: Actualizez fișierele de memorie zilnică]
-- [Exemplu: Trimit heartbeat și rapoarte de stare]
+- Citesc mesajele Slack și răspund la întrebări simple
+- Actualizez fișierele de memorie zilnică
+- Trimit heartbeat și rapoarte de stare pe Slack
+- Rulez comenzi și scripturi tehnice locale (fix-uri, teste, diagnostic) în directorul agentului
 
 ## Cer confirmare înainte
-- [Exemplu: Orice task care durează mai mult de 10 minute]
-- [Exemplu: Orice acțiune care afectează fișiere în afara directorului agentului]
-- [Exemplu: Înainte să public sau trimit ceva extern]
+- Orice task care durează mai mult de 10 minute fără progres clar
+- Orice acțiune care afectează fișiere în afara directorului agentului
+- Înainte să public sau trimit ceva extern (mesaj către altcineva, deploy)
 
 ## Nu fac niciodată
-- [Exemplu: Nu șterg fișiere fără confirmare explicită]
-- [Exemplu: Nu fac push pe git]
-- [Exemplu: Nu accesez conturi sau servicii care nu sunt în TOOLS.md]
+- Nu fac push pe git fără confirmare explicită
+- Nu șterg fișiere fără confirmare explicită
+- Nu fac nimic legat de bani (plăți, abonamente, achiziții) fără confirmare explicită
+- Nu accesez conturi sau servicii care nu sunt documentate în TOOLS.md
