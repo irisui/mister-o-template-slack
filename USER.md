@@ -1,5 +1,5 @@
 ## Despre mine
-**Nume:** Nick
+**Nume:** Nic
 **Timezone:** Europe/Bucharest
 **Program:** activ 08:00-22:00, nu deranja cu update-uri neurgente după 22:00
 
