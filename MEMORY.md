@@ -1,47 +1,37 @@
 # Memory Index
 
-Last consolidated: 2026-08-22
+Last consolidated: 2026-08-24
 
 ## Topic Files
 
 | File | Summary | Updated |
 |------|---------|---------|
-| [memory/facts.md](memory/facts.md) | Project state, system architecture, cron config | 2026-08-22 |
+| [memory/facts.md](memory/facts.md) | Project state, system architecture, cron config, bootstrap file status | 2026-08-24 |
+| [memory/patterns.md](memory/patterns.md) | Session-restart behavior, cron re-creation, known fixed bugs (`.env` sourcing, crash false-positives) | 2026-08-24 |
+| [memory/corrections.md](memory/corrections.md) | User's name is "Nic" not "Nick" | 2026-08-24 |
 
 ## Quick Reference
 
-- Proiect fresh — fișierele bootstrap sunt template-uri necompletate
-- 2 cron-uri: 1m Slack check, 30m heartbeat (config.json)
-- Windows: Task Scheduler + Git Bash restart loop
-- Canal Slack activ: `#asistent-nic`
+- Identitate: agent = "Nic", user = "Nic" (same first name, intentional — see [[corrections]]). IDENTITY.md, SOUL.md, CONTRACT.md, USER.md, TOOLS.md all filled in. Only DECISIONS.md și GROUND-TRUTH.md rămân template-uri goale.
+- 2 cron-uri: 1m Slack check, 30m heartbeat (config.json) — **session-only**, trebuie rearmate la fiecare restart de sesiune (vezi [[patterns]])
+- Windows: Task Scheduler + Git Bash restart loop (nu tmux/launchd) — restarturi frecvente sunt normale
+- Canal Slack activ: `#asistent-nic` (ID `C0BRZEMMK6J`)
+- `.env` sourcing bug în check-slack.sh/send-slack.sh — fixat 2026-08-23, verificat funcțional (vezi [[patterns]])
+- Fals-pozitive de crash la auto-start (bootstrap-ul durează 2-5 min, verificarea vechea aștepta doar 10s) — fixat 2026-08-24 cu grace period de 5 min + retry pe `wt.exe`, testat end-to-end (vezi [[patterns]])
 - Memory type: `project-root`
 
 ---
 
 <!--
-MEMORY.md — Memorii pe termen lung
+MEMORY.md — Index de memorie pe termen lung
 
-Fișierul de memorie persistentă al agentului.
-Agentul actualizează acest fișier când învață ceva important.
-Nu șterge niciodată intrările — doar adaugă sau amendează.
+Acest fișier este un INDEX, nu un depozit de conținut. Intrările detaliate
+trăiesc în memory/*.md (topic files). Agentul actualizează acest fișier
+când apar topic files noi sau când Quick Reference trebuie schimbat.
+Nu șterge niciodată intrări din topic files — doar adaugă sau amendează.
 -->
-
-## Starea proiectului
-
-- [2026-08-22] Proiect `mister-o-template-slack` pornit — instalare fresh. Toate fișierele bootstrap (IDENTITY.md, SOUL.md, CONTRACT.md, USER.md, TOOLS.md, DECISIONS.md, GROUND-TRUTH.md) sunt încă template-uri goale, nepersonalizate. (source: sesiuni 2026-08-22, confidence: high)
-- [2026-08-22] Agentul funcționează tehnic: pornire, cron-uri, Slack. Dar nu are identitate personalizată până când userul completează fișierele bootstrap.
-
-## Preferințe și decizii
-
-- [2026-08-22] Cron-uri configurate în config.json: 1m Slack check + 30m heartbeat. Recreate la fiecare session start. (source: config.json + sesiuni, confidence: high)
-- [2026-08-22] Canalul Slack activ: `#asistent-nic`. Notificarea de online se trimite la fiecare pornire de sesiune.
-- [2026-08-22] Platforma: Windows cu Task Scheduler + Git Bash restart loop (nu tmux/launchd). Scripturi în `scripts/agent-start-windows.sh` și `scripts/install-windows-autostart.ps1`.
-
-## Fapte importante
-
-- [2026-08-22] Prima zi de rulare a agentului. 3+ sesiuni pornite, toate cu pattern identic: bootstrap → crons → Slack online.
-- [2026-08-22] Fișierul `.env` conține `SLACK_CHANNEL_ID` folosit de Slack bot scripts.
 
 ## Persoane
 
 <!-- Persoane relevante cu care lucrezi sau despre care vorbești des -->
+- User: "Nic" (vezi [[corrections]] — nu "Nick") — vezi USER.md pentru detalii (timezone, program, preferințe de comunicare)
