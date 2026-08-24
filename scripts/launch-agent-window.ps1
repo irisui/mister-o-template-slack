@@ -104,9 +104,30 @@ $LaunchScriptBash = "/" + $LaunchScript.Substring(0,1).ToLower() + $LaunchScript
 # ($LaunchScriptBash contine "Nick Popescu"), daca nu e ghilimeluit explicit —
 # altfel bash.exe primeste "/c/Users/Nick" si "Popescu/..." ca doua argumente
 # separate ("No such file or directory"). Ghilimele explicite in string.
-Start-Process -FilePath $WtExe -ArgumentList @(
-    "new-tab",
-    "--title", "AgentSlack",
-    "--",
-    $BashExe, "`"$LaunchScriptBash`""
-)
+# wt.exe uneori nu reuseste sa atasexe o fereastra vizibila din prima
+# incercare (server-ul de fundal WindowsTerminal.exe nu e inca "cald" —
+# observat intermitent in productie, 23-24 aug 2026). Verificam dupa cateva
+# secunde daca a aparut un proces WindowsTerminal.exe nou si, daca nu,
+# reincercam o data inainte sa dam vina pe agent ca a crapat.
+function Start-AgentWindow {
+    $before = @(Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    Start-Process -FilePath $WtExe -ArgumentList @(
+        "new-tab",
+        "--title", "AgentSlack",
+        "--",
+        $BashExe, "`"$LaunchScriptBash`""
+    )
+    Start-Sleep -Seconds 5
+    $after = @(Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    $newWindow = $after | Where-Object { $before -notcontains $_ }
+    return [bool]$newWindow
+}
+
+if (-not (Start-AgentWindow)) {
+    Write-Output "First wt.exe launch attempt produced no new window, retrying once..."
+    Start-Sleep -Seconds 3
+    if (-not (Start-AgentWindow)) {
+        Write-Error "wt.exe failed to open a window after 2 attempts."
+        exit 1
+    }
+}

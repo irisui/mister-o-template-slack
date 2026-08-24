@@ -27,6 +27,13 @@ CRASH_LOG="${LOG_DIR}/crashes.log"
 CRASH_COUNT_FILE="${LOG_DIR}/.crash_count_today"
 MAX_CRASHES_PER_DAY=3
 CHECK_INTERVAL=30          # secunde intre verificari ca procesul e viu
+# Bootstrap-ul agentului (citire IDENTITY/SOUL/CONTRACT/... + /loop pentru
+# fiecare cron din config.json) dureaza in practica 2-5 minute, nu cateva
+# secunde. Un grace period scurt dupa lansare face ca is_agent_running() sa
+# nu gaseasca inca procesul claude.exe cu marker si sa trateze asta drept
+# crash — 3 astfel de fals-pozitive in ~90s declanseaza HALT desi agentul
+# era pe cale sa porneasca normal (vazut in productie pe 23-24 aug 2026).
+STARTUP_GRACE_SECONDS=300  # nicio verificare de crash in primele 5 min dupa (re)lansare
 AGENT_MARKER="AGENT_SESSION_MARKER=mister-o-template-slack"  # vezi launch-agent-window.ps1
 
 mkdir -p "${LOG_DIR}"
@@ -53,43 +60,50 @@ is_agent_running() {
 launch_agent_window() {
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) Launching agent window" >> "${LOG_DIR}/activity.log"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${WT_LAUNCHER}" -ProjectDir "${PROJECT_DIR}" > /dev/null 2>&1 &
+    LAST_LAUNCH_EPOCH=$(date +%s)
 }
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) agent-start-windows.sh (supervisor mode) launched (project: ${PROJECT_DIR})" >> "${LOG_DIR}/activity.log"
 
 launch_agent_window
-sleep 10   # lasa fereastra sa porneasca inainte de primul check
 
 while true; do
-    TODAY=$(date +%Y-%m-%d)
-    if [[ -f "${CRASH_COUNT_FILE}" ]]; then
-        STORED_DATE=$(cut -d: -f1 "${CRASH_COUNT_FILE}" 2>/dev/null || echo "")
-        CRASH_COUNT=$(cut -d: -f2 "${CRASH_COUNT_FILE}" 2>/dev/null || echo "0")
-    else
-        STORED_DATE=""
-        CRASH_COUNT=0
-    fi
-    [[ "${STORED_DATE}" != "${TODAY}" ]] && CRASH_COUNT=0
-
-    if [[ ${CRASH_COUNT} -ge ${MAX_CRASHES_PER_DAY} ]]; then
-        echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) HALTED: exceeded ${MAX_CRASHES_PER_DAY} crashes today. Manual restart required." >> "${CRASH_LOG}"
-        if [[ -n "${SLACK_BOT_TOKEN:-}" && -n "${SLACK_CHANNEL_ID:-}" ]]; then
-            ALERT_TEXT="ALERT: Agentul a crapat de ${MAX_CRASHES_PER_DAY} ori azi si s-a oprit. Reporneste task-ul din Task Scheduler (my-agent-slack) cand esti gata."
-            curl -s -X POST "https://slack.com/api/chat.postMessage" \
-                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-                -H "Content-type: application/json; charset=utf-8" \
-                --data "$(jq -nc --arg ch "${SLACK_CHANNEL_ID}" --arg txt "${ALERT_TEXT}" '{channel: $ch, text: $txt}')" \
-                > /dev/null 2>&1 || true
-        fi
-        exit 1
-    fi
-
     sleep "${CHECK_INTERVAL}"
 
+    # Cat timp suntem inca in grace period de la ultima lansare, sarim peste
+    # verificare — bootstrap-ul agentului nu a avut inca timp sa termine.
+    SECONDS_SINCE_LAUNCH=$(( $(date +%s) - LAST_LAUNCH_EPOCH ))
+    if [[ ${SECONDS_SINCE_LAUNCH} -lt ${STARTUP_GRACE_SECONDS} ]]; then
+        continue
+    fi
+
     if ! is_agent_running; then
+        TODAY=$(date +%Y-%m-%d)
+        if [[ -f "${CRASH_COUNT_FILE}" ]]; then
+            STORED_DATE=$(cut -d: -f1 "${CRASH_COUNT_FILE}" 2>/dev/null || echo "")
+            CRASH_COUNT=$(cut -d: -f2 "${CRASH_COUNT_FILE}" 2>/dev/null || echo "0")
+        else
+            STORED_DATE=""
+            CRASH_COUNT=0
+        fi
+        [[ "${STORED_DATE}" != "${TODAY}" ]] && CRASH_COUNT=0
+        CRASH_COUNT=$((CRASH_COUNT + 1))
+        echo "${TODAY}:${CRASH_COUNT}" > "${CRASH_COUNT_FILE}"
+
+        if [[ ${CRASH_COUNT} -ge ${MAX_CRASHES_PER_DAY} ]]; then
+            echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) HALTED: exceeded ${MAX_CRASHES_PER_DAY} crashes today. Manual restart required." >> "${CRASH_LOG}"
+            if [[ -n "${SLACK_BOT_TOKEN:-}" && -n "${SLACK_CHANNEL_ID:-}" ]]; then
+                ALERT_TEXT="ALERT: Agentul a crapat de ${MAX_CRASHES_PER_DAY} ori azi si s-a oprit. Reporneste task-ul din Task Scheduler (my-agent-slack) cand esti gata."
+                curl -s -X POST "https://slack.com/api/chat.postMessage" \
+                    -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                    -H "Content-type: application/json; charset=utf-8" \
+                    --data "$(jq -nc --arg ch "${SLACK_CHANNEL_ID}" --arg txt "${ALERT_TEXT}" '{channel: $ch, text: $txt}')" \
+                    > /dev/null 2>&1 || true
+            fi
+            exit 1
+        fi
+
         echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) Agent window not found — treating as crash, relaunching" >> "${CRASH_LOG}"
-        echo "${TODAY}:$((CRASH_COUNT + 1))" > "${CRASH_COUNT_FILE}"
         launch_agent_window
-        sleep 10
     fi
 done
