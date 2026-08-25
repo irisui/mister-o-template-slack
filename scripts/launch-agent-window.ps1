@@ -85,10 +85,22 @@ $AgentLogDir = Join-Path $env:USERPROFILE ".agent-logs"
 New-Item -ItemType Directory -Force -Path $AgentLogDir | Out-Null
 $LaunchScript = Join-Path $AgentLogDir "launch-agent.sh"
 
+# Fisier marker pe disc, scris chiar inainte de exec-ul lui claude, cu PID-ul
+# procesului bash care il porneste. supervisor.sh Windows citeste acest fisier
+# (nu linia de comanda a lui claude.exe, care nu contine niciodata variabila
+# de mediu AGENT_SESSION_MARKER — un env var exportat in bash nu apare in
+# Win32_Process.CommandLine al copilului claude.exe) ca sa stie daca sesiunea
+# agentului e inca vie: verifica daca procesul cu acel PID mai exista.
+# 'exec' inlocuieste procesul bash cu claude pastrand acelasi PID, deci PID-ul
+# scris in marker devine chiar PID-ul lui claude.exe dupa exec.
+$MarkerFile = Join-Path $AgentLogDir "session.marker"
+$MarkerFileBash = "/" + $MarkerFile.Substring(0,1).ToLower() + $MarkerFile.Substring(2).Replace('\','/')
+
 $ScriptContent = @"
 export AGENT_SESSION_MARKER=mister-o-template-slack
+echo `$`$ > '$MarkerFileBash'
 cd '$ProjectDir'
-'$ClaudeExeBash' --dangerously-skip-permissions '$EscapedPrompt'
+exec '$ClaudeExeBash' --dangerously-skip-permissions '$EscapedPrompt'
 "@
 Set-Content -Path $LaunchScript -Value $ScriptContent -Encoding ASCII -NoNewline
 

@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
-# Independent watchdog. Runs once per tick (launchd StartInterval), then exits.
-# Deliberately does NOT 'set -e': an internal error must never propagate in a
-# way that could harm the agent. We log and exit 0.
+# Independent watchdog, varianta Windows. Ruleaza o data per tick (apelat de
+# Task Scheduler la interval, sau intr-o bucla din agent-start-windows.sh),
+# apoi iese. Deliberat NU foloseste 'set -e': o eroare interna nu trebuie sa
+# se propage intr-un fel care ar putea afecta agentul. Logam si iesim 0.
+#
+# Echivalentul Windows al supervisor.sh original (macOS/tmux/launchctl):
+# - tmux has-session               -> proces claude.exe viu, identificat prin
+#                                      fisierul marker scris de launch-agent-window.ps1
+#                                      (vezi acolo: launch-agent-window.ps1
+#                                      scrie PID-ul via 'exec' inainte de a
+#                                      porni claude, deci PID-ul din marker
+#                                      devine PID-ul lui claude.exe insusi)
+# - launchctl kickstart            -> launch-agent-window.ps1 (fereastra noua
+#                                      Windows Terminal cu claude interactiv)
+# - stat -f %z (BSD)               -> stat -c %s (GNU, din Git for Windows)
+#
+# Decizia HEALTHY/GRACE/DOWN si flap-detection/backoff/pathological raman
+# neschimbate — logica pura vine din lib/supervisor-lib.sh, neschimbata.
 set -uo pipefail
 
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,12 +29,9 @@ ENV_FILE="${ENV_FILE:-${PROJECT_DIR}/.env}"
 STATE_DIR="${STATE_DIR:-${HOME}/.agent-logs}"
 LOG_FILE="${LOG_FILE:-${STATE_DIR}/supervisor.log}"
 ALIVE_FILE="${ALIVE_FILE:-${STATE_DIR}/alive}"
-TMUX_BIN="${TMUX_BIN:-tmux}"
-LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
+MARKER_FILE="${MARKER_FILE:-${STATE_DIR}/session.marker}"
 NOTIFY_BIN="${NOTIFY_BIN:-${LIB_DIR}/notify.sh}"
-UID_VAL="${UID_VAL:-$(id -u)}"
-AGENT_LABEL="com.my-agent"
-TMUX_SESSION="my-agent"
+LAUNCH_WINDOW_PS1="${LAUNCH_WINDOW_PS1:-${LIB_DIR}/launch-agent-window.ps1}"
 LOG_MAX_BYTES=1048576
 
 mkdir -p "$STATE_DIR"
@@ -44,38 +56,54 @@ BACKOFF_CSV="$(jq -r '(.supervisor.backoff_schedule // [600,1200,1800]) | map(to
 
 rotate_if_needed() {
   [[ -f "$LOG_FILE" ]] || return 0
-  local size; size="$(stat -f %z "$LOG_FILE" 2>/dev/null || echo 0)"
+  local size; size="$(stat -c %s "$LOG_FILE" 2>/dev/null || stat -f %z "$LOG_FILE" 2>/dev/null || echo 0)"
   if [[ "$(should_rotate "$size" "$LOG_MAX_BYTES")" == "1" ]]; then
     mv -f "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null || true
   fi
 }
-log() { rotate_if_needed; printf '%s %s\n' "$(date -u -r "$now" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$now")" "$*" >> "$LOG_FILE"; }
+log() { rotate_if_needed; printf '%s %s\n' "$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$now")" "$*" >> "$LOG_FILE"; }
 
 read_int() { local f="$1" d="$2"; if [[ -f "$f" ]]; then cat "$f"; else echo "$d"; fi; }
 
+# Proces claude.exe cu PID-ul din marker inca viu? (echivalentul Windows al
+# 'tmux has-session'). Foloseste 'ps -p' din Git for Windows (functioneaza pe
+# PID-uri Windows), nu Get-Process, ca sa evitam un fork powershell.exe la
+# fiecare tick.
+agent_process_present() {
+  [[ -f "$MARKER_FILE" ]] || return 1
+  local pid; pid="$(cat "$MARKER_FILE" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  ps -p "$pid" >/dev/null 2>&1
+}
+
+launch_agent_window() {
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${LAUNCH_WINDOW_PS1}" -ProjectDir "${PROJECT_DIR}" > /dev/null 2>&1
+}
+
 main() {
-  local last_tick alive grace_until tmux_present slept state sess_created prev_sess
+  local last_tick alive grace_until agent_present slept state marker_mtime prev_marker_mtime
   last_tick="$(read_int "$LAST_TICK_F" 0)"
   alive="$(read_int "$ALIVE_FILE" 0)"
   grace_until="$(read_int "$GRACE_F" 0)"
 
-  if "$TMUX_BIN" has-session -t "$TMUX_SESSION" 2>/dev/null; then tmux_present=1; else tmux_present=0; fi
+  if agent_process_present; then agent_present=1; else agent_present=0; fi
 
-  # Cold-start grace: a NEW agent tmux session means the agent just (re)started
-  # and has not written its first heartbeat beacon yet. Grant a grace window so a
-  # healthy, freshly started agent is not classified DOWN by a stale beacon. A
-  # genuine wedge keeps the same session and is still caught; tmux absent is still DOWN.
-  sess_created=""
-  if [[ "$tmux_present" -eq 1 ]]; then
-    # (test harnesses inject the fake tmux which honors a TMUX_CREATED env override)
-    sess_created="$("$TMUX_BIN" display-message -p -t "$TMUX_SESSION" '#{session_created}' 2>/dev/null || true)"
+  # Cold-start grace: un marker NOU (mtime diferit de ultima verificare)
+  # inseamna ca agentul tocmai a (re)pornit si n-a apucat inca sa scrie primul
+  # heartbeat beacon. Acordam o fereastra de gratie ca un agent sanatos,
+  # proaspat pornit, sa nu fie clasificat DOWN pe baza unui beacon vechi. Un
+  # blocaj real pastreaza acelasi marker si tot e prins; marker absent tot
+  # inseamna DOWN.
+  marker_mtime=""
+  if [[ "$agent_present" -eq 1 && -f "$MARKER_FILE" ]]; then
+    marker_mtime="$(stat -c %Y "$MARKER_FILE" 2>/dev/null || stat -f %m "$MARKER_FILE" 2>/dev/null || true)"
   fi
-  prev_sess="$(read_int "$SESS_F" "")"
-  if [[ "$tmux_present" -eq 1 && -n "$sess_created" && "$sess_created" =~ ^[0-9]+$ && "$sess_created" != "$prev_sess" ]]; then
+  prev_marker_mtime="$(read_int "$SESS_F" "")"
+  if [[ "$agent_present" -eq 1 && -n "$marker_mtime" && "$marker_mtime" != "$prev_marker_mtime" ]]; then
     grace_until=$(( now + STALE ))
     echo "$grace_until" > "$GRACE_F"
-    echo "$sess_created" > "$SESS_F"
-    log "STARTUP detected (agent session ${sess_created}) grace_until=${grace_until}"
+    echo "$marker_mtime" > "$SESS_F"
+    log "STARTUP detected (marker mtime ${marker_mtime}) grace_until=${grace_until}"
   fi
 
   slept="$(compute_slept "$now" "$last_tick" "$TICK")"
@@ -85,33 +113,33 @@ main() {
     log "SLEEP detected (gap $(( now - last_tick ))s) grace_until=${grace_until}"
   fi
 
-  state="$(classify_state "$tmux_present" "$alive" "$now" "$STALE" "$grace_until")"
+  state="$(classify_state "$agent_present" "$alive" "$now" "$STALE" "$grace_until")"
 
   case "$state" in
     HEALTHY|GRACE)
-      log "${state} tmux=${tmux_present} alive_age=$(( now - alive ))s"
+      log "${state} agent_present=${agent_present} alive_age=$(( now - alive ))s"
       ;;
     DOWN)
       local restarts decision
       restarts="$(read_int "$RESTARTS_F" "")"
       decision="$(flap_decision "$restarts" "$now" "$FC" "$FW" "$PC" "$PW" "$BACKOFF_CSV")"
       if [[ "$DRY" == "true" ]]; then
-        log "DRY DOWN -> would act decision=${decision} tmux=${tmux_present} alive_age=$(( now - alive ))s"
+        log "DRY DOWN -> would act decision=${decision} agent_present=${agent_present} alive_age=$(( now - alive ))s"
       else
         case "$decision" in
           OK)
             if [[ "$AR" == "true" ]]; then
-              "$LAUNCHCTL_BIN" kickstart -k "gui/${UID_VAL}/${AGENT_LABEL}" >/dev/null 2>&1 || true
+              launch_agent_window
               restarts="${restarts:+${restarts},}${now}"
               echo "$restarts" > "$RESTARTS_F"
-              log "DOWN -> RESTART (kickstart) restarts=[${restarts}]"
-              "$NOTIFY_BIN" info "Mister O. era jos, l-am repornit la $(date -u -r "$now" +%H:%MZ 2>/dev/null || echo "$now"). Sunt iar online." || true
+              log "DOWN -> RESTART (launch-agent-window.ps1) restarts=[${restarts}]"
+              "$NOTIFY_BIN" info "Agentul Nic era jos, l-am repornit la $(date -u -d "@$now" +%H:%MZ 2>/dev/null || echo "$now"). Sunt iar online." || true
             else
               local last_alert; last_alert="$(read_int "$LAST_ALERT_F" 0)"
               log "DOWN -> ALERT-ONLY (auto_restart off) no restart"
               if [[ $(( now - last_alert )) -ge "$STALE" ]]; then
                 echo "$now" > "$LAST_ALERT_F"
-                "$NOTIFY_BIN" warning "Mister O. e jos. auto_restart e oprit, nu repornesc automat. Reporneste manual: launchctl kickstart -k gui/${UID_VAL}/${AGENT_LABEL}" || true
+                "$NOTIFY_BIN" warning "Agentul Nic e jos. auto_restart e oprit, nu repornesc automat. Reporneste manual (Task Scheduler: my-agent-slack, sau bash scripts/agent-start-windows.sh)." || true
               fi
             fi
             ;;
@@ -121,7 +149,7 @@ main() {
             log "DOWN -> BACKOFF ${secs}s (flapping) no restart"
             if [[ $(( now - last_alert )) -ge "$secs" ]]; then
               echo "$now" > "$LAST_ALERT_F"
-              "$NOTIFY_BIN" warning "Mister O. se tot reporneste, intru in backoff ${secs}s." || true
+              "$NOTIFY_BIN" warning "Agentul Nic se tot reporneste, intru in backoff ${secs}s." || true
             fi
             ;;
           PATHOLOGICAL)
@@ -130,7 +158,7 @@ main() {
             if [[ $(( now - last_alert )) -ge "$PW" ]]; then
               echo "$now" > "$LAST_ALERT_F"
               local tail_err; tail_err="$(tail -3 "${STATE_DIR}/stderr.log" 2>/dev/null | tr '\n' ' ' | cut -c1-300)"
-              "$NOTIFY_BIN" red "Mister O. e jos si nu se stabilizeaza singur. Ai nevoie sa intervii. Ultima eroare: ${tail_err}" || true
+              "$NOTIFY_BIN" red "Agentul Nic e jos si nu se stabilizeaza singur. Ai nevoie sa intervii. Ultima eroare: ${tail_err}" || true
             fi
             ;;
         esac
@@ -141,7 +169,7 @@ main() {
   echo "$now" > "$LAST_TICK_F"
 }
 
-# Defensive wrapper: any failure is logged, never propagated.
+# Defensive wrapper: orice eroare e logata, niciodata propagata.
 if ! main 2>>"${LOG_FILE}"; then
   log "ERROR supervisor main failed (handled, exiting 0)"
 fi

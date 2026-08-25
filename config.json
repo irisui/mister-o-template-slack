@@ -20,6 +20,6 @@
     "pathological_window_seconds": 7200,
     "dry_run": false,
     "test_slack_channel_id": "",
-    "auto_restart": false
+    "auto_restart": true
   }
 }

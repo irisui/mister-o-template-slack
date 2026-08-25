@@ -3,7 +3,7 @@
 # should-dream.sh - Check if dream consolidation should run
 #
 # Returns exit code 0 if dream should run, 1 if not.
-# Condition: 24+ hours since last consolidation.
+# Condition: 7+ days (168h) since last consolidation.
 #
 # Reads memory type from ~/.claude/skills/dream/.dream-config
 # Supports: native (Claude Code auto-memory), openclaw, project-root
@@ -47,13 +47,13 @@ case "$DREAM_MEMORY_TYPE" in
         ;;
 esac
 
-# Check: 24+ hours since last consolidation
+# Check: 7+ days (168h) since last consolidation
 LAST_DREAM=$(cat "$LAST_DREAM_FILE")
 NOW=$(date +%s)
 ELAPSED=$(( NOW - LAST_DREAM ))
 HOURS_ELAPSED=$(( ELAPSED / 3600 ))
 
-if (( HOURS_ELAPSED < 24 )); then
+if (( HOURS_ELAPSED < 168 )); then
     exit 1  # Too soon
 fi
 

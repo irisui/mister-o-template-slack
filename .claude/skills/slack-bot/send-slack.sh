@@ -25,10 +25,16 @@ if [ -z "$CHANNEL" ] || [ -z "$MESSAGE" ]; then
 fi
 
 # Build the JSON body with jq so quotes, newlines and unicode in the message are safe.
+# Written to a temp file and sent with --data-binary @file rather than as a command-line
+# argument: curl.exe is a native Windows binary, and MSYS bash mangles non-ASCII (diacritics,
+# em dashes) when converting argv for a native exec. A file bypasses that conversion.
+JSON_FILE=$(mktemp)
+jq -nc --arg ch "$CHANNEL" --arg txt "$MESSAGE" '{channel: $ch, text: $txt}' > "$JSON_FILE"
 RESPONSE=$(curl -s -X POST "https://slack.com/api/chat.postMessage" \
   -H "Authorization: Bearer ${BOT_TOKEN}" \
   -H "Content-type: application/json; charset=utf-8" \
-  --data "$(jq -nc --arg ch "$CHANNEL" --arg txt "$MESSAGE" '{channel: $ch, text: $txt}')")
+  --data-binary "@$JSON_FILE")
+rm -f "$JSON_FILE"
 
 # Check for errors
 if echo "$RESPONSE" | jq -e '.ok == true' > /dev/null 2>&1; then

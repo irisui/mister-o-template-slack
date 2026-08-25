@@ -36,9 +36,15 @@ if [[ -z "$token" || -z "$channel" ]]; then
   exit 0
 fi
 
+# Written to a temp file and sent with --data-binary @file rather than as a command-line
+# argument: curl is a native Windows binary, and MSYS bash mangles non-ASCII (diacritics,
+# em dashes) when converting argv for a native exec. A file bypasses that conversion.
+JSON_FILE="$(mktemp)"
+jq -nc --arg ch "$channel" --arg txt "${prefix} ${message}" '{channel: $ch, text: $txt}' > "$JSON_FILE"
 "$CURL_BIN" -s -X POST "https://slack.com/api/chat.postMessage" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-type: application/json; charset=utf-8" \
-  --data "$(jq -nc --arg ch "$channel" --arg txt "${prefix} ${message}" '{channel: $ch, text: $txt}')" \
+  --data-binary "@$JSON_FILE" \
   >/dev/null 2>&1 || true
+rm -f "$JSON_FILE"
 exit 0

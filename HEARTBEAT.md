@@ -8,11 +8,11 @@ Adaugă task-uri pe care vrei ca agentul să le execute periodic.
 - [ ] Rulează `bash scripts/mark-alive.sh` (semnal de liveness pentru supervisor)
 - [ ] Verifică dacă există mesaje Slack noi (dacă nu a rulat cron-ul de 1m)
 - [ ] Actualizează fișierul de memorie zilnică cu ce s-a întâmplat
+- [ ] Trimite raport zilnic de stare pe Slack dacă e ora 22:00 sau mai târziu și nu a fost deja trimis azi (activitate, erori, stare sisteme) — vezi `scripts/daily-report.sh`
 
 ## Task-uri opționale (decomentează sau adaugă)
 
 <!-- - [ ] Verifică starea serviciilor din GROUND-TRUTH.md -->
-<!-- - [ ] Trimite raport de stare pe Slack dacă e după ora 09:00 -->
 <!-- - [ ] Rulează un script de monitorizare -->
 
 ---
