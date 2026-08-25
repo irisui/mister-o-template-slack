@@ -6,6 +6,7 @@
       "Bash(python3 scripts/memory-flush.py)",
       "Bash(python3 scripts/activity-log.py)",
       "Bash(python3 scripts/loop-detector.py)",
+      "Bash(python3 scripts/guard-dangerous.py)",
       "Bash(bash scripts/dream-hook.sh)"
     ]
   },
@@ -26,6 +27,14 @@
           {
             "type": "command",
             "command": "python3 scripts/loop-detector.py"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/guard-dangerous.py"
           }
         ]
       }

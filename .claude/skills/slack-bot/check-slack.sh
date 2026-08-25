@@ -14,6 +14,7 @@ BOT_TOKEN="${SLACK_BOT_TOKEN}"
 CHANNEL_ID="${SLACK_CHANNEL_ID}"
 ALLOWED_USER="${SLACK_ALLOWED_USER}"   # Your Slack user ID (U...) - set in .env
 TS_FILE="$HOME/.claude-slack-ts"
+SCAN_INJECTION="$SCRIPT_DIR/../../../scripts/scan-injection.sh"   # vezi acolo: de ce exista
 
 if [ -z "$BOT_TOKEN" ]; then
   echo "ERROR: SLACK_BOT_TOKEN not set. Add to .env:"
@@ -106,6 +107,13 @@ if [ "$MSG_COUNT" -gt 0 ]; then
           *)
             LOCAL_PATH="/tmp/slack-doc-$(date +%s)-${SAFE_NAME}"
             curl -s --max-time 60 -H "Authorization: Bearer ${BOT_TOKEN}" "$FILE_URL" -o "$LOCAL_PATH"
+            # Documentul descarcat e continut extern citit de agent — scanare
+            # anti-injection inainte de a-l lasa in mainile agentului. Doar
+            # avertizeaza (nu blocheaza): documentul e in continuare emis mai
+            # jos, agentul decide ce face cu el conform CONTRACT.md.
+            if [ -f "$SCAN_INJECTION" ]; then
+              bash "$SCAN_INJECTION" --file "$LOCAL_PATH" --notify --source "documentul Slack '${FILE_NAME}'" >/dev/null 2>&1 || true
+            fi
             echo "$msg" | jq -c --arg chan "$CHANNEL_ID" --arg path "$LOCAL_PATH" --arg dn "$FILE_NAME" '{
               chat_id: $chan,
               from: .user,
@@ -119,6 +127,10 @@ if [ "$MSG_COUNT" -gt 0 ]; then
       fi
     else
       # Text message. Never emit a bare null text so nothing is silently lost.
+      MSG_TEXT=$(echo "$msg" | jq -r '.text // "(mesaj fara continut text)"')
+      if [ -f "$SCAN_INJECTION" ]; then
+        bash "$SCAN_INJECTION" --text "$MSG_TEXT" --notify --source "un mesaj Slack" >/dev/null 2>&1 || true
+      fi
       echo "$msg" | jq -c --arg chan "$CHANNEL_ID" '{
         chat_id: $chan,
         from: .user,
