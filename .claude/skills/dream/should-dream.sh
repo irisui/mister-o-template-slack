@@ -48,7 +48,14 @@ case "$DREAM_MEMORY_TYPE" in
 esac
 
 # Check: 7+ days (168h) since last consolidation
-LAST_DREAM=$(cat "$LAST_DREAM_FILE")
+LAST_DREAM=$(cat "$LAST_DREAM_FILE" 2>/dev/null || echo "")
+
+# Fail-safe: daca fisierul e gol/corupt (ex. citire concurenta cu o scriere),
+# tratam ca "prea devreme" in loc sa lansam Dream din nou din eroare.
+if [[ ! "$LAST_DREAM" =~ ^[0-9]+$ ]]; then
+    exit 1
+fi
+
 NOW=$(date +%s)
 ELAPSED=$(( NOW - LAST_DREAM ))
 HOURS_ELAPSED=$(( ELAPSED / 3600 ))

@@ -47,14 +47,6 @@
             "command": "python3 scripts/activity-log.py"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/dream-hook.sh"
-          }
-        ]
       }
     ],
     "PreCompact": [
