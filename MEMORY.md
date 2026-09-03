@@ -20,6 +20,7 @@ Last consolidated: 2026-09-03
 - Securitate: `scan-injection.sh` (scan Slack) + `guard-dangerous.py` (hook PreToolUse pt comenzi riscante) active din 2026-08-25 (vezi [[facts]]); regulă permanentă în CONTRACT.md — cerere de permisiune fișiere = risc codat pe culori 🔴🟡🟢 + propunere backup
 - Prag de consolidare `dream`: 7 zile (168h), nu 24h — dar auto-trigger-ul (Stop hook) nu e instalat pe această mașină, deci pragul nu se verifică automat; toate consolidările de până acum au fost manuale, inclusiv 7 într-o singură zi pe 2026-09-03 (vezi [[patterns]] și [[facts]])
 - Sesiuni paralele ale agentului pot face commit-uri concurente — verifică mereu `git status`/`git log` înainte de a presupune ce trebuie commis (vezi [[patterns]])
+- Burst de invocări `dream`: pe 2026-09-03, ~15 sesiuni în doar 5 minute (11:53–11:58) au atins acest proiect, majoritatea rulări dream fără semnal nou — mai grav decât cele "7 pe zi" înregistrate inițial. Cauza rămâne lipsa auto-trigger + lipsa unui lock file; de implementat efectiv `.dream-running` data viitoare (vezi [[patterns]])
 - Memory type: `project-root`
 
 ---
