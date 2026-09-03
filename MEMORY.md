@@ -18,7 +18,7 @@ Last consolidated: 2026-09-03
 - Canal Slack activ: `#asistent-nic` (ID `C0BRZEMMK6J`)
 - Bug diacritice/em-dash în mesaje Slack (curl.exe + argv prin MSYS bash) — fixat 2026-08-25 în send-slack.sh/notify.sh/agent-start-windows.sh (vezi [[patterns]])
 - Securitate: `scan-injection.sh` (scan Slack) + `guard-dangerous.py` (hook PreToolUse pt comenzi riscante) active din 2026-08-25 (vezi [[facts]]); regulă permanentă în CONTRACT.md — cerere de permisiune fișiere = risc codat pe culori 🔴🟡🟢 + propunere backup
-- Prag de consolidare `dream`: 7 zile (168h), nu 24h — schimbat 2026-08-25 (vezi [[patterns]])
+- Prag de consolidare `dream`: 7 zile (168h), nu 24h — dar auto-trigger-ul (Stop hook) nu e instalat pe această mașină, deci pragul nu se verifică automat; toate consolidările de până acum au fost manuale, inclusiv 7 într-o singură zi pe 2026-09-03 (vezi [[patterns]] și [[facts]])
 - Sesiuni paralele ale agentului pot face commit-uri concurente — verifică mereu `git status`/`git log` înainte de a presupune ce trebuie commis (vezi [[patterns]])
 - Memory type: `project-root`
 
