@@ -8,6 +8,10 @@
     {
       "interval": "30m",
       "prompt": "Run bash scripts/mark-alive.sh first (liveness signal). Then: Read HEARTBEAT.md and perform each task listed. Also read today's memory file at memory/{today's date}.md for context. Update the memory file with anything notable."
+    },
+    {
+      "cron": "0 21 * * *",
+      "prompt": "Triaj Gmail zilnic (spec stabilita cu Nic 2026-09-05, vezi TODO.md). Cauta in Gmail (conector MCP claude.ai Gmail) mesajele necitite din ultimele 24h (is:unread newer_than:1d). Strict read-only: NU muta, nu marca, nu stergi, nu adaugi labels. Pentru fiecare mesaj citeste subiect + expeditor + inceputul continutului si judeca liber, caz cu caz, daca e Urgent sau Poate astepta (fara reguli fixe de cuvinte-cheie). Daca sunt 50+ mesaje intr-o zi, grupeaza pe expeditor/domeniu/tip in loc sa listezi fiecare individual, ca mesajul sa ramana citibil. Trimite UN mesaj pe Slack (bash .claude/skills/slack-bot/send-slack.sh C0BRZEMMK6J \"...\") in formatul: 'Triaj Gmail (ultimele 24h) - N necitite noi' urmat de linie 'Urgent (x): [expeditor] subiect - motiv scurt' pentru fiecare/grup urgent, si linie 'Poate astepta (y): rezumat pe scurt / grupare pe tip'. Daca 0 necitite noi in 24h, trimite mesaj scurt 'nimic nou', nu ramane tacut."
     }
   ],
   "supervisor": {
