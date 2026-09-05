@@ -3,8 +3,6 @@
 .credentials/
 
 # Directoare generate de agent
-memory/*
-!memory/.gitkeep
 data/
 .last-dream
 .dream-running
